@@ -1,0 +1,6 @@
+#!/bin/sh
+
+while inotifywait -e modify -e create /WIREGUARD/WEB; do
+  service wireguardweb stop
+  service wireguardweb start
+done

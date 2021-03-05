@@ -1,0 +1,7 @@
+#!/bin/sh
+
+while inotifywait -e modify -e create /WIREGUARD/APP; do
+  # TODO: Utiliser une variable d'environnement pour le nom du fichier
+  wg-quick down /WIREGUARD/APP/wg0.conf
+  wg-quick up /WIREGUARD/APP/wg0.conf
+done

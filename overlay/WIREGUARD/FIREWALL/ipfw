@@ -1,0 +1,66 @@
+#!/bin/sh
+
+# CONSTANT ---------------------------------------------------------------------
+ARGS=""
+DIR="/WIREGUARD/FIREWALL/rules"
+# USERDIR="/mnt/W/firewall"
+USERDIR="/mnt/f/Laboratoires/Github.com/PiESTR-TrueNAS/iocage-network-wireguard/overlay/WIREGUARD/FIREWALL"
+RULES="default"
+RULESVAR=""
+
+
+# FUNCTION ---------------------------------------------------------------------
+run() {
+  if [ ! -f "${1}" ]; then
+    echo "Rules doesn't exist: ${1}"
+    return
+  fi
+  exec "${1}" $ARGS
+}
+
+# PROCESSING -------------------------------------------------------------------
+if [ $# -gt 0 ]; then
+  arg=$(echo $1| tr '[:upper:]' '[:lower:]')
+
+  case $arg in
+    "default");;
+    "preup" | "postup" | "predown" | "postdown")
+      RULES="${arg}"
+    ;;
+  esac
+
+  # Remove first argument from arguments lists
+  shift
+  ARGS=$@
+fi
+RULESVAR="FW_$(echo ${RULES} | tr '[:lower:]' '[:upper:]')"
+
+if [ -f "${USERDIR}/config.ini" ]; then
+
+  value=$( \
+    awk -F "=" -v pattern="${RULESVAR}" \
+    '$0 ~ pattern {print $2}' "${USERDIR}/config.ini" \
+  )
+
+  case ${value} in
+    "false")
+      run "${DIR}/${RULES}.rules"
+    ;;
+    "override")
+      run "${USERDIR}/${RULES}.rules"
+    ;;
+    "pre")
+      run "${USERDIR}/${RULES}.rules"
+      run "${DIR}/${RULES}.rules"
+    ;;
+    "post")
+      run "${DIR}/${RULES}.rules"
+      run "${USERDIR}/${RULES}.rules"
+    ;;
+  esac
+
+else
+
+  run "${DIR}/${RULES}.rules" $ARGS
+
+fi

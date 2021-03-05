@@ -1,0 +1,25 @@
+{
+  "official": false,
+  "revision": "0",
+  "name": "HOMEMADE_WIREGUARD",
+  "release": "12.2-RELEASE",
+  "artifact": "https://github.com/PiESTR-TrueNAS/iocage-network-wireguard.git",
+  "properties": {
+    "allow_tun": 1,
+    "bpf": 1,
+    "dhcp": 1,
+    "vnet": 1
+  },
+  "pkgs": [
+    "inotify-tools", "wireguard"
+  ],
+  "packagesize": "http://pkg.FreeBSD.org/${ABI}/latest",
+  "fingerprints": {
+    "plugin-default": [
+      {
+        "function": "sha256",
+        "fingerprint": "b0170035af3acc5f3f3ae1859dc717101b4e6c1d0a794ad554928ca0cbb2f438"
+      }
+    ]
+  }
+}

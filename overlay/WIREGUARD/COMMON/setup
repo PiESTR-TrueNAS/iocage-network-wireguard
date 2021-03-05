@@ -1,0 +1,8 @@
+#!/bin/sh
+
+USERDIR="/mnt/W"
+SKELETON="/WIREGUARD/COMMON/SKELETON"
+
+if [ -d "${USERDIR}" ]; then
+  cp -a -n "${SKELETON}/." "${USERDIR}"
+fi

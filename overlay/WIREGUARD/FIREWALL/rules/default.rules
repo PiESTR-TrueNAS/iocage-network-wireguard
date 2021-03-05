@@ -1,0 +1,119 @@
+#!/bin/sh
+
+# CONSTANT ---------------------------------------------------------------------
+IFW="ipfw -q add "
+
+LIF="epair0b"              # Internet-facing iface
+LSKIP="skipto 1000"        # Used for outboud NAT rules
+LSSH="22"                  # sshd port
+LSUBNET="192.168.1.0/24"   # Local network subnet
+
+WDNS="1.1.1.1"             # DNS Server
+WIF="wg0"                  # Wireguard interface
+WPORT="51820"              # Listen Port
+WSUBNET="192.168.254.0/24" # Subnet
+
+
+
+# PROCESSING -------------------------------------------------------------------
+# Flush all rules before we begin.
+ipfw -q -f flush
+
+# Allow NAT
+ipfw disable one_pass
+ipfw -q nat 1 config if ${LIF} same_ports unreg_only reset
+
+# Allow all for localhost
+$IFW 00010 allow ip from any to any via lo0
+$IFW 00011 allow ip from any to any via ${WIF}
+
+# NAT-specifig rules
+$IFW 00099 reass all from any to any in           # reassamble inbound packets
+$IFW 00100 nat 1 ip from any to any in via ${LIF} # NAT any inbound packets
+
+# checks stateful rules. If marked as "keep-state" the packet has already passed
+# through filters and is "OK" without futher rule matching
+$IFW 00101 check-state
+
+# Allow DNS out
+$IFW 00110 ${LSKIP} tcp from any to ${WDNS} dst-port 53 out via ${LIF} setup keep-state
+$IFW 00111 ${LSKIP} udp from any to ${WDNS} dst-port 53 out via ${LIF} keep-state
+
+# Allow dhclient connection out (port numbers are important)
+$IFW 00120 ${LSKIP} udp from me 68 to any dst-port 67 out via ${LIF} keep-state
+
+# Allow HTTP HTTPS replies
+$IFW 00200 ${LSKIP} tcp from any to any dst-port 80 out via ${LIF} setup keep-state
+$IFW 00220 ${LSKIP} tcp from any to any dst-port 443 out via ${LIF} setup keep-state
+
+# Allow outbound mail
+$IFW 00230 ${LSKIP} tcp from any to any dst-port 25 out via ${LIF} setup keep-state
+$IFW 00231 ${LSKIP} tcp from any to any dst-port 465 out via ${LIF} setup keep-state
+$IFW 00232 ${LSKIP} tcp from any to any dst-port 587 out via ${LIF} setup keep-state
+
+# Allow WG
+$IFW 00233 ${LSKIP} udp from any to any src-port ${WPORT} out via ${LIF} keep-state
+$IFW 00234 ${LSKIP} udp from ${WSUBNET} to any out via ${LIF} keep-state
+$IFW 00235 ${LSKIP} tcp from ${WSUBNET} to any out via ${LIF} setup keep-state
+
+# Allow icmp re: ping, et. al.
+# comment this out to disable ping, et.al.
+$IFW 00250 ${LSKIP} icmp from any to any out via ${LIF} keep-state
+
+# Allow timeserver out
+$IFW 00260 ${LSKIP} tcp from any to any dst-port 37 out via ${LIF} setup keep-state
+
+# Allow ntp out
+$IFW 00270 ${LSKIP} udp from any to any dst-port 123 out via ${LIF} keep-state
+
+# Allow outbound SSH traffic
+$IFW 00280 ${LSKIP} tcp from any to any dst-port 22 out via ${LIF} setup keep-state
+
+# Otherwise deny outbound packets
+# Outbound catchall.
+$IFW 00299 deny log ip from any to any out via ${LIF}
+
+# Inbound rules
+# Deny inbound traffic to restricted addresses
+$IFW 00300 deny ip from 192.168.0.0/16 to any in via ${LIF}
+$IFW 00301 deny all from 172.16.0.0/12 to any in via ${LIF}      #RFC 1918 private IP
+$IFW 00302 deny ip from 10.0.0.0/8 to any in via ${LIF}
+$IFW 00303 deny ip from 127.0.0.0/8 to any in via ${LIF}
+$IFW 00304 deny ip from 0.0.0.0/8 to any in via ${LIF}
+$IFW 00305 deny ip from 169.254.0.0/16 to any in via ${LIF}
+$IFW 00306 deny ip from 192.0.2.0/24 to any in via ${LIF}
+$IFW 00307 deny ip from 204.152.64.0/23 to any in via ${LIF}
+$IFW 00308 deny ip from 224.0.0.0/3 to any in via ${LIF}
+
+# Deny inbound packets on these ports
+# Auth 113, netbios (services) 137/138/139, hosts-nameserver 81
+$IFW 00315 deny tcp from any to any dst-port 113 in via ${LIF}
+$IFW 00320 deny tcp from any to any dst-port 137 in via ${LIF}
+$IFW 00321 deny tcp from any to any dst-port 138 in via ${LIF}
+$IFW 00322 deny tcp from any to any dst-port 139 in via ${LIF}
+$IFW 00323 deny tcp from any to any dst-port 81 in via ${LIF}
+
+# Deny partial packets
+$IFW 00330 deny ip from any to any frag in via ${LIF}
+$IFW 00332 deny tcp from any to any established in via ${LIF}
+
+# Allowing icmp re: ping, etc.
+$IFW 00310 allow icmp from any to any in via ${LIF}
+
+# Allowing inbound mail, dhcp, http, https
+$IFW 00370 allow udp from any 67 to me dst-port 68 in via ${LIF} keep-state
+
+# Allow inbound ssh, mail. PROTECTED SERVICES: numbered ABOVE sshguard blacklist range
+$IFW 00700 allow tcp from any to me dst-port ${LSSH} in via ${LIF} setup limit src-addr 2
+$IFW 00702 allow udp from any to any dst-port ${WPORT} in via ${LIF} keep-state
+
+# Deny everything else, and log it
+# Inbound catchall
+$IFW 999 deny log ip from any to any in via ${LIF}
+
+# NAT
+$IFW 1000 nat 1 ip from any to any out via ${LIF} # skipto location for outbound stateful rules
+$IFW 1001 allow ip from any to any
+
+# ipfw built-in default, don't uncomment
+# $IFW 65535 deny ip from any to any

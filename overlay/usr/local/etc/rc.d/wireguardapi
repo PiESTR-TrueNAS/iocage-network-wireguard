@@ -1,0 +1,65 @@
+#!/bin/sh
+#
+# PROVIDE: wireguardweb
+# REQUIRE: LOGIN wireguard
+# KEYWORD: shutdown
+#
+# Add the following line to /etc/rc.conf to enable ddclient:
+#
+# wireguardapi_enable (bool):   Set to NO by default.
+#                               Set it to YES to enable wireguardapi.
+# wireguardapi_device (string): Default as "wg0".
+# wireguardapi_logging (bool):  Set to YES by default.
+#                               Set it to NO to disable logging.
+#
+#
+
+. /etc/rc.subr
+
+# VARIABLE INIT -----
+command="/WIREGUARD/API"
+name="wireguardapi"
+logfile="/var/log/${name}"
+pidfile="/var/run/${name}"
+
+
+rcvar="${name}_enable"
+load_rc_config ${name}
+: ${wireguardapi_enable:="NO"}
+: ${wireguardapi_device:="wg0"}
+: ${wireguardapi_logging:="YES"}
+
+
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+
+
+# PROCESS -----
+wireguardapi_start() {
+  args=""
+  if [ "${wireguardapi_logging}" == "YES" ]; then
+    args="${args} -o ${logfile}"
+  fi
+
+  /usr/sbin/daemon -P ${pidfile} ${args} -r ${command} --device=${wireguardapi_device}
+  echo "${name} has started with pid `cat ${pidfile}`"
+}
+
+wireguardapi_stop() {
+  if [ -e "${pidfile}" ]; then
+    kill -s TERM `cat ${pidfile}`
+  else
+    echo "${name} is not running"
+  fi
+}
+
+wireguardapi_status() {
+  if [ -e "${pidfile}" ]; then
+    echo "${name} is running as pid `cat ${pidfile}`"
+  else
+    echo "${name} is not running"
+  fi
+}
+
+run_rc_command "$1"
